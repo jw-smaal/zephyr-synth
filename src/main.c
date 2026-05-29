@@ -32,11 +32,7 @@ static const struct device *const i2s_dev = DEVICE_DT_GET(DT_ALIAS(i2s_tx));
  * @brief Shared synthesizer state
  */
 struct synth_state g_synth_state = {
-	.gate_open = false,
-	.active_note = 0,
-	.velocity_scale = 0,
-	.phase_inc = 0,
-	.phase_acc = 0,
+	.note_counter = 0,
 };
 
 uint32_t phase_inc_lut[128];
@@ -70,6 +66,13 @@ static void init_luts(void)
 		float linear = powf(10.0f, db / 20.0f);
 		/* Convert to Q15 */
 		velocity_lut[vel] = (q15_t)(linear * 32767.0f);
+	}
+
+	/* Initialize Voice Cards */
+	for (int i = 0; i < MAX_VOICES; i++) {
+		g_synth_state.voices[i].gate_open = false;
+		g_synth_state.voices[i].phase_acc = 0;
+		g_synth_state.voices[i].age = 0;
 	}
 
 	LOG_INF("LUTs initialized for %d Hz sample rate", 

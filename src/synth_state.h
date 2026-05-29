@@ -17,16 +17,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MAX_VOICES 4
+
+/**
+ * @brief Represents a single "Voice Card"
+ */
+struct voice_card {
+	bool gate_open;             /**< Simple square envelope gate */
+	uint8_t note;               /**< MIDI note number */
+	q15_t velocity_scale;       /**< Amplitude scale factor (Q15) */
+	uint32_t phase_inc;         /**< 32-bit phase increment */
+	uint32_t phase_acc;         /**< 32-bit phase accumulator */
+	uint32_t age;               /**< Incremented on every Note On to track oldest note */
+};
+
 /**
  * @brief Shared synthesizer state
  */
 struct synth_state {
 	struct k_mutex lock;        /**< Mutex for thread-safe access */
-	bool gate_open;             /**< Simple square envelope gate */
-	uint8_t active_note;        /**< Last MIDI note triggered */
-	q15_t velocity_scale;       /**< Amplitude scale factor (Q15) derived from velocity */
-	uint32_t phase_inc;         /**< Current 32-bit phase increment */
-	uint32_t phase_acc;         /**< Persistent 32-bit phase accumulator */
+	struct voice_card voices[MAX_VOICES];
+	uint32_t note_counter;      /**< Global counter to assign age to notes */
 };
 
 /**

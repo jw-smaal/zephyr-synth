@@ -30,41 +30,52 @@ extern struct synth_state g_synth_state;
 static const struct device *const i2s_dev = DEVICE_DT_GET(DT_ALIAS(i2s_tx));
 
 /**
- * @brief Fill a buffer with mono sine samples based on synth state
+ * @brief Fill a buffer by summing all active voices
  */
 static void fill_audio_block(struct synth_state *state, int16_t *buffer)
 {
-	bool gate;
-	uint32_t phase_inc;
-	q15_t scale;
+	struct voice_card local_voices[MAX_VOICES];
 
-	/* Snap current state to avoid holding mutex throughout the DSP loop */
+	/* Snapshot all voice states at once to minimize mutex contention */
 	k_mutex_lock(&state->lock, K_FOREVER);
-	gate = state->gate_open;
-	phase_inc = state->phase_inc;
-	scale = state->velocity_scale;
+	memcpy(local_voices, state->voices, sizeof(local_voices));
 	k_mutex_unlock(&state->lock);
 
 	for (uint32_t i = 0; i < SAMPLES_PER_BLOCK; i++) {
-		q15_t sample = 0;
+		int32_t accumulator = 0;
 
-		if (gate) {
-			/* Map 32-bit phase to 15-bit angle (0x8000 = 2*PI) */
-			q15_t sine = arm_sin_q15((q15_t)(state->phase_acc >> PHASE_TO_SINE_SHIFT));
-			
-			/* Apply velocity scaling using standard integer math */
-			sample = (q15_t)(((int32_t)sine * scale) >> 15);
-			
-			state->phase_acc += phase_inc;
-		} else {
-			/* Square envelope: clear phase on gate off to prevent pops on re-trigger */
-			state->phase_acc = 0;
+		for (int v = 0; v < MAX_VOICES; v++) {
+			if (local_voices[v].gate_open) {
+				/* Generate sine for this voice */
+				q15_t sine = arm_sin_q15((q15_t)(local_voices[v].phase_acc >> PHASE_TO_SINE_SHIFT));
+				
+				/* Apply velocity scaling and add to 32-bit accumulator */
+				accumulator += (int32_t)(((int32_t)sine * local_voices[v].velocity_scale) >> 15);
+				
+				/* Advance phase for this voice's local snapshot */
+				local_voices[v].phase_acc += local_voices[v].phase_inc;
+			} else {
+				local_voices[v].phase_acc = 0;
+			}
 		}
 
-		/* Interleave Stereo (Duplicate mono to both channels) */
-		buffer[i * 2] = sample;
-		buffer[i * 2 + 1] = sample;
+		/* 
+		 * Scale down the sum to prevent clipping. 
+		 * With 4 voices, we shift right by 2 (divide by 4).
+		 */
+		q15_t mixed_sample = (q15_t)(accumulator >> 2);
+
+		/* Interleave Stereo */
+		buffer[i * 2] = mixed_sample;
+		buffer[i * 2 + 1] = mixed_sample;
 	}
+
+	/* Write the updated phase accumulators back to the shared state */
+	k_mutex_lock(&state->lock, K_FOREVER);
+	for (int v = 0; v < MAX_VOICES; v++) {
+		state->voices[v].phase_acc = local_voices[v].phase_acc;
+	}
+	k_mutex_unlock(&state->lock);
 }
 
 /**
