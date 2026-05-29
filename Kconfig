@@ -1,0 +1,20 @@
+# Copyright 2026 Jan-Willem Smaal <usenet@gispen.org>
+# SPDX-License-Identifier: Apache-2.0
+
+menu "MIDI Synth Options"
+
+config AUDIO_SAMPLE_RATE
+	int "Sample Rate (Hz)"
+	default 48000
+	help
+	  System audio sample rate.
+
+config AUDIO_BIT_WIDTH
+	int "Sample Bit Width"
+	default 16
+	help
+	  Audio bit depth.
+
+endmenu
+
+source "Kconfig.zephyr"
