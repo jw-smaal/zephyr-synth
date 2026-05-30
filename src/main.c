@@ -109,7 +109,14 @@ int main(void)
 	struct i2s_config conf;
 	int ret;
 
-	LOG_INF("Basic MIDI Sine Wave Synthesizer Ready.");
+	/* Application Banner */
+	printk("\n\n########################################\n");
+	printk("# MIDI Polyphonic Sine Synthesizer     #\n");
+	printk("# Hardware: %-26s #\n", CONFIG_BOARD_TARGET);
+	printk("# Build:    %-26s #\n", __DATE__ " " __TIME__);
+	printk("########################################\n\n");
+
+	LOG_INF("Initializing system components...");
 
 	if (!device_is_ready(i2s_dev)) {
 		LOG_ERR("I2S device not ready");
