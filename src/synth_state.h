@@ -17,7 +17,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_VOICES 4
+/* These can be 2, 4, 8, 16 or 32 */
+#define MAX_VOICES CONFIG_VOICECARD_VOICES
+
+/**
+ * @brief Calculate the fixed bit-shift required to prevent overflow 
+ * based on the maximum possible voices. This ensures consistent note 
+ * volume across different MCU configurations.
+ */
+#if MAX_VOICES <= 1
+  #define MIXER_SHIFT 0
+#elif MAX_VOICES <= 2
+  #define MIXER_SHIFT 1
+#elif MAX_VOICES <= 4
+  #define MIXER_SHIFT 2
+#elif MAX_VOICES <= 8
+  #define MIXER_SHIFT 3
+#elif MAX_VOICES <= 16
+  #define MIXER_SHIFT 4
+#else
+  #define MIXER_SHIFT 5
+#endif
 
 /**
  * @brief Represents a single "Voice Card"

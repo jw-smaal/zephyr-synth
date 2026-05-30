@@ -12,6 +12,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2s.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 #include <arm_math.h>
 #include "synth_state.h"
 
@@ -60,10 +61,10 @@ static void fill_audio_block(struct synth_state *state, int16_t *buffer)
 		}
 
 		/* 
-		 * Scale down the sum to prevent clipping. 
-		 * With 4 voices, we shift right by 2 (divide by 4).
+		 * Apply fixed headroom shift for consistent note volume.
+		 * CLAMP is the standard Zephyr utility to safely saturate/limit a value.
 		 */
-		q15_t mixed_sample = (q15_t)(accumulator >> 2);
+		q15_t mixed_sample = (q15_t)CLAMP(accumulator >> MIXER_SHIFT, -32768, 32767);
 
 		/* Interleave Stereo */
 		buffer[i * 2] = mixed_sample;

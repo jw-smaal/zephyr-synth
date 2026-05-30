@@ -5,15 +5,21 @@ menu "MIDI Synth Options"
 
 config AUDIO_SAMPLE_RATE
 	int "Sample Rate (Hz)"
-	default 48000
+	default 96000
 	help
-	  System audio sample rate.
+	  System audio sample rate. Possible values 8000, 16000, 32000 etc.
+
+config VOICECARD_VOICES
+	int "Number of voices"
+	default 8
+	help
+	  Number of voices support.  Multiples of 2.  2, 4, 8, 16 etc...
 
 config AUDIO_BIT_WIDTH
 	int "Sample Bit Width"
 	default 16
 	help
-	  Audio bit depth.
+	  Audio bit depth (currently only 16 bit works!)
 
 endmenu
 

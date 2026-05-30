@@ -38,7 +38,7 @@ To build for the FRDM-MCXN947:
 
 .. code-block:: bash
 
-    west build -b frdm_mcxn947/mcxn947/cpu0 midi-synth -p always
+    west build -b frdm_mcxn947/mcxn947/cpu0 -p always
 
 To flash:
 
