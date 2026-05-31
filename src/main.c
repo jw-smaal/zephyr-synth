@@ -110,12 +110,13 @@ int main(void)
 	int ret;
 
 	/* Application Banner */
-	printk("\n\n########################################\n");
-	printk("# MIDI Polyphonic Sine Synthesizer     #\n");
-	printk("# Hardware: %-26s #\n", CONFIG_BOARD_TARGET);
-	printk("# Build:    %-26s #\n", __DATE__ " " __TIME__);
-	printk("########################################\n\n");
-
+	LOG_INF("\n\n");
+	LOG_INF("##############################################");
+	LOG_INF("# MIDI Polyphonic Sine Synthesizer");
+	LOG_INF("# By: Jan-Willem Smaal <usenet@gispen.org");
+	LOG_INF("# Hardware: %-26s", CONFIG_BOARD_TARGET);
+	LOG_INF("# Build:    %-26s", __DATE__ " " __TIME__);
+	LOG_INF("##############################################");
 	LOG_INF("Initializing system components...");
 
 	if (!device_is_ready(i2s_dev)) {

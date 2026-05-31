@@ -13,7 +13,7 @@
 	midi0: midi0 {
 		status = "okay";
 		compatible = "midi1_serial";
-		uart = <&lpuart2>;
+		uart = <&lpuart1>;
 	};
 };
 
@@ -25,8 +25,8 @@
 	mclk-output;
 };
 
-/* MIDI/Console on Arduino D0/D1 */
-&lpuart2 {
+/* MIDI/Console on MIKROEbus */
+&lpuart1 {
 	status = "okay";
 	current-speed = <31250>;
 };

@@ -27,21 +27,11 @@ static void midi_note_on_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 	int voice_to_use = -1;
 	uint32_t oldest_age = 0xFFFFFFFF;
 
-	/* Treat velocity 0 as Note Off */
-	if (velocity == 0) {
-		k_mutex_lock(&g_synth_state.lock, K_FOREVER);
-		for (int i = 0; i < MAX_VOICES; i++) {
-			if (g_synth_state.voices[i].note == note && g_synth_state.voices[i].gate_open) {
-				g_synth_state.voices[i].gate_open = false;
-			}
-		}
-		k_mutex_unlock(&g_synth_state.lock);
-		return;
-	}
+	LOG_INF("Note On callback");
 
 	k_mutex_lock(&g_synth_state.lock, K_FOREVER);
 	
-	/* 1. Look for an idle voice */
+	/* Look for an idle voice */
 	for (int i = 0; i < MAX_VOICES; i++) {
 		if (!g_synth_state.voices[i].gate_open) {
 			voice_to_use = i;
@@ -49,7 +39,7 @@ static void midi_note_on_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 		}
 	}
 
-	/* 2. If no idle voice, steal the oldest one */
+	/* If no idle voice, steal the oldest one */
 	if (voice_to_use == -1) {
 		for (int i = 0; i < MAX_VOICES; i++) {
 			if (g_synth_state.voices[i].age < oldest_age) {
