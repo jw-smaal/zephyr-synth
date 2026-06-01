@@ -12,9 +12,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2s.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>
-#include <arm_math.h>
-#include "synth_state.h"
+#include "audio.h"
+#include "synth_engine.h"
 
 LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -22,90 +21,32 @@ LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 #define SAMPLES_PER_BLOCK 128
 #define CHANNELS 2
 #define FRAME_SIZE (SAMPLES_PER_BLOCK * CHANNELS * sizeof(int16_t))
-#define PHASE_TO_SINE_SHIFT 17
 
 /* Memory slab for I2S TX blocks */
-K_MEM_SLAB_DEFINE(audio_slab, FRAME_SIZE, 16, 32);
+K_MEM_SLAB_DEFINE_STATIC(audio_slab, FRAME_SIZE, 16, 32);
 
-extern struct synth_state g_synth_state;
 static const struct device *const i2s_dev = DEVICE_DT_GET(DT_ALIAS(i2s_tx));
-
-/**
- * @brief Fill a buffer by summing all active voices
- */
-static void fill_audio_block(struct synth_state *state, int16_t *buffer)
-{
-	struct voice_card local_voices[MAX_VOICES];
-
-	/* Snapshot all voice states at once to minimize mutex contention */
-	k_mutex_lock(&state->lock, K_FOREVER);
-	memcpy(local_voices, state->voices, sizeof(local_voices));
-	k_mutex_unlock(&state->lock);
-
-	for (uint32_t i = 0; i < SAMPLES_PER_BLOCK; i++) {
-		int32_t accumulator = 0;
-
-		for (int v = 0; v < MAX_VOICES; v++) {
-			if (local_voices[v].gate_open) {
-				/* Generate sine for this voice */
-				q15_t sine = arm_sin_q15((q15_t)(local_voices[v].phase_acc >> PHASE_TO_SINE_SHIFT));
-				
-				/* Apply velocity scaling and add to 32-bit accumulator */
-				accumulator += (int32_t)(((int32_t)sine * local_voices[v].velocity_scale) >> 15);
-				
-				/* Advance phase for this voice's local snapshot */
-				local_voices[v].phase_acc += local_voices[v].phase_inc;
-			} else {
-				local_voices[v].phase_acc = 0;
-			}
-		}
-
-		/* 
-		 * Apply fixed headroom shift for consistent note volume.
-		 * CLAMP is the standard Zephyr utility to safely saturate/limit a value.
-		 */
-		q15_t mixed_sample = (q15_t)CLAMP(accumulator >> MIXER_SHIFT, -32768, 32767);
-
-		/* Interleave Stereo */
-		buffer[i * 2] = mixed_sample;
-		buffer[i * 2 + 1] = mixed_sample;
-	}
-
-	/* Write the updated phase accumulators back to the shared state */
-	k_mutex_lock(&state->lock, K_FOREVER);
-	for (int v = 0; v < MAX_VOICES; v++) {
-		state->voices[v].phase_acc = local_voices[v].phase_acc;
-	}
-	k_mutex_unlock(&state->lock);
-}
 
 /**
  * @brief Audio Generation Thread
  */
-void audio_thread_fn(void *p1, void *p2, void *p3)
+static void audio_thread_fn(void *p1, void *p2, void *p3)
 {
 	int ret;
 	void *tx_buffer;
 	bool started = false;
 
-	if (!device_is_ready(i2s_dev)) {
-		LOG_ERR("I2S device not ready");
-		return;
-	}
-
 	LOG_INF("Audio Thread Started");
 
 	while (1) {
-		/* Allocate memory block for current frame */
 		ret = k_mem_slab_alloc(&audio_slab, &tx_buffer, K_FOREVER);
 		if (ret < 0) {
 			continue;
 		}
 
-		/* Generate audio data */
-		fill_audio_block(&g_synth_state, (int16_t *)tx_buffer);
+		/* Fill buffer from DSP engine */
+		synth_engine_render_block((int16_t *)tx_buffer, SAMPLES_PER_BLOCK);
 
-		/* Write to I2S driver */
 		ret = i2s_write(i2s_dev, tx_buffer, FRAME_SIZE);
 		if (ret < 0) {
 			k_mem_slab_free(&audio_slab, tx_buffer);
@@ -113,11 +54,9 @@ void audio_thread_fn(void *p1, void *p2, void *p3)
 				LOG_ERR("I2S write failed: %d", ret);
 				break;
 			}
-			/* On EAGAIN, we just dropped the frame. Proceed. */
 			continue;
 		}
 
-		/* Handle NXP SAI Startup Sequence: Queue 1 block then trigger START */
 		if (!started) {
 			ret = i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
 			if (ret < 0) {
@@ -130,3 +69,33 @@ void audio_thread_fn(void *p1, void *p2, void *p3)
 }
 
 K_THREAD_DEFINE(audio_tid, 2048, audio_thread_fn, NULL, NULL, NULL, -2, 0, K_TICKS_FOREVER);
+
+int audio_system_init(void)
+{
+	struct i2s_config conf;
+	int ret;
+
+	if (!device_is_ready(i2s_dev)) {
+		LOG_ERR("I2S device not ready");
+		return -ENODEV;
+	}
+
+	conf.word_size = CONFIG_AUDIO_BIT_WIDTH;
+	conf.channels = 2;
+	conf.format = I2S_FMT_DATA_FORMAT_I2S;
+	conf.options = I2S_OPT_BIT_CLK_CONTROLLER | I2S_OPT_FRAME_CLK_CONTROLLER;
+	conf.frame_clk_freq = CONFIG_AUDIO_SAMPLE_RATE;
+	conf.block_size = 128 * 2 * (CONFIG_AUDIO_BIT_WIDTH / 8);
+	conf.timeout = 2000;
+	conf.mem_slab = &audio_slab;
+
+	ret = i2s_configure(i2s_dev, I2S_DIR_TX, &conf);
+	if (ret < 0) {
+		LOG_ERR("I2S TX configure failed: %d", ret);
+		return ret;
+	}
+
+	k_thread_start(audio_tid);
+
+	return 0;
+}
