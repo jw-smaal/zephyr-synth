@@ -21,6 +21,7 @@ target_sources(app PRIVATE
     src/audio.c 
     src/synth_engine.c
     src/midi_handler.c
+    src/adsr.c 
 )
 
 target_include_directories(app PRIVATE src ${CMAKE_CURRENT_BINARY_DIR}/include)

@@ -13,10 +13,14 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 #include "synth_engine.h"
+#include "adsr.h"
+
+/* This LUT is generated during the build process */
 #include "synth_luts_generated.h"
 
 LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 
+/* Look at the Kconfig */
 #define MAX_VOICES CONFIG_VOICECARD_VOICES
 
 #if MAX_VOICES <= 1
@@ -43,6 +47,7 @@ K_MSGQ_DEFINE(synth_evt_queue, sizeof(struct synth_event), 32, 4);
  */
 struct voice_card {
 	bool gate_open;             /**< Simple square envelope gate */
+	struct adsr envelope; 	/**< Each voice sounding has it's own ADSR */
 	uint8_t note;               /**< MIDI note number */
 	q15_t velocity_scale;       /**< Amplitude scale factor (Q15) */
 	uint32_t phase_inc;         /**< 32-bit phase increment */
