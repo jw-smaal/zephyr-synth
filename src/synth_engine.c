@@ -103,6 +103,17 @@ struct adsr_param g_param = {
 	.end = 0,
 };
 
+static int count_active_voices(void)
+{
+	int active = 0;
+	for (int i = 0; i < MAX_VOICES; i++) {
+		if (m_synth_state.voices[i].envelope.state != END) {
+			active++;
+		}
+	}
+	return active;
+}
+
 static void handle_note_on(uint8_t note, uint8_t velocity, enum synth_wave wave)
 {
 	int voice_to_use = -1;
@@ -135,6 +146,8 @@ static void handle_note_on(uint8_t note, uint8_t velocity, enum synth_wave wave)
 		m_synth_state.voices[voice_to_use].velocity_scale = velocity_lut[velocity & 0x7F];
 		m_synth_state.voices[voice_to_use].gate_open = true;
 		m_synth_state.voices[voice_to_use].age = ++m_synth_state.note_counter;
+		LOG_INF("Voice On:  Note %d -> Slot %d (Active: %d/%d)",
+			note, voice_to_use, count_active_voices(), MAX_VOICES);
 	}
 }
 
@@ -148,6 +161,8 @@ static void handle_note_off(uint8_t note)
 			v_ptr->envelope.state = RELEASE;
 			v_ptr->envelope.lifetime = g_param.release;
 			v_ptr->envelope.initial_lifetime = g_param.release;
+			LOG_INF("Voice Off: Note %d -> Slot %d (Active: %d/%d)",
+				note, i, count_active_voices(), MAX_VOICES);
 		}
 		if (v_ptr->envelope.state == END) {
 			v_ptr->gate_open = false;
@@ -183,19 +198,16 @@ void synth_engine_render_block(int16_t *buffer, uint32_t samples)
 			q15_t raw_sample = 0;
 			struct voice_card *v_ptr = &m_synth_state.voices[v];
 			if (v_ptr->envelope.state != END) {
-				if(v_ptr->wave == SYNTH_WAVE_SINE) {
+				if (v_ptr->wave == SYNTH_WAVE_SINE) {
 					raw_sample = arm_sin_q15(
 						(q15_t)(v_ptr->phase_acc >> PHASE_TO_SINE_SHIFT));
-					//int32_t sample_vol =
-					//	(v_ptr->velocity_scale * v_ptr->envelope.current_gain) >> 15;
-					//accumulator += (int32_t)((int32_t)sine * sample_vol) >> 15;
 					v_ptr->phase_acc += v_ptr->phase_inc;
-				}
-				else if (v_ptr->wave == SYNTH_WAVE_SAW) {
+				} else if (v_ptr->wave == SYNTH_WAVE_SAW) {
 					raw_sample = (q15_t)(v_ptr->phase_acc >> 16);
 					v_ptr->phase_acc += v_ptr->phase_inc;
 				}
-				int32_t sample_vol = (v_ptr->velocity_scale * v_ptr->envelope.current_gain) >> 15;
+				int32_t sample_vol =
+					(v_ptr->velocity_scale * v_ptr->envelope.current_gain) >> 15;
 				accumulator += (int32_t)((int32_t)raw_sample * sample_vol) >> 15;
 			} else {
 				v_ptr->phase_acc = 0;
