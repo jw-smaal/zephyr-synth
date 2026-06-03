@@ -1,32 +1,34 @@
 # ADSR Implementation Assignment
 
 ## Objective
-Implement a per-voice ADSR envelope generator that attenuates the sine wave based on the note's lifecycle (Attack, Decay, Sustain, Release).
+Implement a per-voice ADSR envelope generator with "Piano-style" (time-limited) sustain support.
 
 ## Tasks
 
 ### 1. Update `adsr_process` Signature & Timing
-- [ ] Modify `adsr_process` in `adsr.h` and `adsr.c` to accept `uint32_t delta_samples`.
-- [ ] Update the `lifetime` decrement logic to subtract `delta_samples`.
-- [ ] Handle state transitions when `lifetime` hits zero (e.g., Attack -> Decay).
+- [x] Modify `adsr_process` in `adsr.h` and `adsr.c` to accept `uint32_t delta_samples`.
+- [x] Update the `lifetime` decrement logic to subtract `delta_samples`.
+- [x] **State Sync**: In `adsr_process`, handle state transitions when `lifetime` hits zero.
+- [x] **Initial Lifetime**: Restore and reset `initial_lifetime` whenever the state changes.
+- [x] **Curve Selection**: Add a `bool use_log` parameter to `adsr_process`.
 
 ### 2. Implement Gain Interpolation (`adsr.c`)
-- [ ] **ATTACK**: Calculate `current_gain` as a linear ramp from 0 to `FULL_LEVEL` (32767).
-    - Formula: `Gain = (1.0 - (lifetime / initial_lifetime)) * 32767`
-- [ ] **DECAY**: Calculate linear ramp from `FULL_LEVEL` down to `sustain_level`.
-- [ ] **SUSTAIN**: Set `current_gain` to a constant `sustain_level`.
-- [ ] **RELEASE**: Calculate linear ramp from `sustain_level` down to 0.
-    - Formula: `Gain = (lifetime / initial_lifetime) * sustain_level`
+- [x] **ATTACK**: Gain = `((initial - lifetime) * 32767U) / initial`
+- [x] **DECAY**: Linear ramp from 32767 down to `sustain_level`.
+- [x] **SUSTAIN (Piano Mode)**: Hold `sustain_level` for `param.sustain` samples, then transition to **RELEASE** automatically.
+- [x] **RELEASE**: Linear ramp from `sustain_level` down to 0.
+- [x] **Log Curve**: Implement the "Square Trick" when `use_log` is true: `Gain = (Gain * Gain) >> 15`.
 
 ### 3. Integrate with Synth Engine (`synth_engine.c`)
-- [ ] **Tick the Envelopes**: In `synth_engine_render_block`, loop through each voice and call `adsr_process(&voice->envelope, samples)` before the rendering loop.
-- [ ] **Note Off -> Release**: Update `handle_note_off` to trigger the `RELEASE` state of the envelope instead of setting `gate_open = false`.
-- [ ] **Active Voice Logic**: Update the mixing loop to check if `envelope.state != END` instead of checking the `gate_open` boolean.
-- [ ] **Apply Attenuation**: Multiply the `velocity_scale` by the `envelope.current_gain` to get the final sample volume.
+- [x] **Fix Syntax**: Fix spelling (`g_param.rekease`) and missing commas in `adsr_process` calls.
+- [x] **Move the Tick**: Move `adsr_process` call out of the sample loop and into the voice loop (once per 128 samples).
+- [x] **Note Off Trigger**: Update `handle_note_off` to force a transition to **RELEASE**.
+- [x] **Active Voice Logic**: Render only if `envelope.state != END`.
+- [x] **Apply Attenuation**: Multiply sine by `velocity_scale` AND `envelope.current_gain`.
 
 ### 4. Initialization
-- [ ] Update `handle_note_on` to initialize the `initial_lifetime` and `lifetime` for the `ATTACK` phase.
-- [ ] Define a macro `MS_TO_SAMPLES(ms)` to convert time parameters into sample counts.
+- [x] Fix `synth_engine_init` to access `envelope.lifetime` correctly.
+- [x] Define `MS_TO_SAMPLES(ms)` with `uint64_t` cast.
 
 ---
-*Note: Aim for block-accurate updates (once per 128 samples) first as it is more CPU efficient.*
+*Status: ADSR implementation 100% complete!*
