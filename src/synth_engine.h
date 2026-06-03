@@ -22,11 +22,20 @@ enum synth_event_type {
 	SYNTH_EVT_NOTE_OFF,
 };
 
+/** 
+ * @brief Waveforms 
+ */
+enum synth_wave {
+	SYNTH_WAVE_SINE,
+	SYNTH_WAVE_SAW,
+};
+
 /**
  * @brief Synthesizer event structure
  */
 struct synth_event {
 	enum synth_event_type type;
+	enum synth_wave wave;
 	uint8_t note;
 	uint8_t velocity;
 };
