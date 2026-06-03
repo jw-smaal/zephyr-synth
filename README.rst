@@ -1,16 +1,22 @@
-MIDI Sine Wave Synthesizer for NXP MCXN947
-########################################
+MIDI Polyphonic Synthesizer for NXP MCXN947
+###########################################
 
-A monophonic sine wave synthesizer controlled via MIDI 1.0 over UART. This project demonstrates a multi-threaded architecture separating MIDI message parsing from real-time audio generation on the FRDM-MCXN947.
+A polyphonic synthesizer controlled via MIDI 1.0 over UART. This project demonstrates a multi-threaded architecture separating MIDI message parsing from real-time audio generation on the FRDM-MCXN947.
 
 Features
 ********
 
-*   **MIDI Control**: Responsive to Note On and Note Off messages.
+*   **Polyphony**: Supports up to 16 simultaneous voices with age-based voice stealing.
+*   **Multiple Waveforms**: Sine and Sawtooth oscillators with per-voice selection.
+*   **ADSR Envelope**: Per-voice Attack-Decay-Sustain-Release envelope with smooth transitions.
 *   **DDS Synthesis**: Direct Digital Synthesis using CMSIS-DSP FastMath.
 *   **Fixed-Point Math**: All runtime audio calculations utilize Q15 fixed-point arithmetic.
-*   **Phase Increment LUT**: Pre-calculated lookup table for frequency conversion to ensure deterministic timing.
 *   **Real-Time Safety**: Non-blocking I2S queue management with frame dropping on congestion.
+
+Prerequisites
+*************
+
+This project depends on the out-of-tree **zephyr-midi1** module for MIDI protocol parsing and harmonic utilities. Ensure it is correctly registered in your west workspace.
 
 Hardware Setup
 **************

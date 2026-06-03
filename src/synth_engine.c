@@ -96,10 +96,10 @@ void synth_submit_event(struct synth_event *evt)
 
 #define MS_TO_SAMPLES(ms) (((uint64_t)(ms) * CONFIG_AUDIO_SAMPLE_RATE) / 1000)
 struct adsr_param g_param = {
-	.attack = MS_TO_SAMPLES(400),
+	.attack = MS_TO_SAMPLES(20),
 	.decay = MS_TO_SAMPLES(50),
-	.sustain = MS_TO_SAMPLES(30000),
-	.release = MS_TO_SAMPLES(1500),
+	.sustain = 0xffffffff,
+	.release = MS_TO_SAMPLES(800),
 	.end = 0,
 };
 
