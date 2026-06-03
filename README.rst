@@ -22,7 +22,7 @@ Hardware Setup
 **************
 
 *   **Audio Output**: PCM5102A DAC connected to SAI1.
-*   **MIDI Input**: 3.125 kBaud UART connected to ``flexcomm2_lpuart2`` (Arduino Header pins D0/D1).
+*   **MIDI Input**: 3.125 kBaud UART connected to ``flexcomm2_lpuart2`` (on MIKRObus header).
 
 Pin Mapping (I2S):
 ==================
