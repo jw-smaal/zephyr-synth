@@ -19,8 +19,8 @@ LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 
 /* --- Audio Constants --- */
 #define SAMPLES_PER_BLOCK 128
-#define CHANNELS 2
-#define FRAME_SIZE (SAMPLES_PER_BLOCK * CHANNELS * sizeof(int16_t))
+#define CHANNELS          2
+#define FRAME_SIZE        (SAMPLES_PER_BLOCK * CHANNELS * sizeof(int16_t))
 
 /* Memory slab for I2S TX blocks */
 K_MEM_SLAB_DEFINE_STATIC(audio_slab, FRAME_SIZE, 16, 32);

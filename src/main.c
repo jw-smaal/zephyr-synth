@@ -32,7 +32,9 @@ static void rx_sink_thread_fn(void *p1, void *p2, void *p3)
 	size_t size;
 	int ret;
 
-	ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
 
 	while (1) {
 		ret = i2s_read(i2s_dev, &rx_buffer, &size);
@@ -76,7 +78,7 @@ int main(void)
 	conf.block_size = 128 * 2 * (CONFIG_AUDIO_BIT_WIDTH / 8);
 	conf.timeout = 2000;
 	conf.mem_slab = &rx_slab;
-	
+
 	ret = i2s_configure(i2s_dev, I2S_DIR_RX, &conf);
 	if (ret < 0) {
 		LOG_ERR("I2S RX configure failed: %d", ret);

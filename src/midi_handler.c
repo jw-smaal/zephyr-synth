@@ -28,11 +28,11 @@ static void midi_note_on_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 		.note = note,
 		.velocity = velocity,
 	};
-	
+
 	synth_submit_event(&evt);
 
-	LOG_INF("Note On  | Ch: %2d | Note: %3d (%-4s) | Vel: %3d",
-		channel + 1, note, harm_note_to_text_with_octave(note, false), velocity);
+	LOG_INF("Note On  | Ch: %2d | Note: %3d (%-4s) | Vel: %3d", channel + 1, note,
+		harm_note_to_text_with_octave(note, false), velocity);
 }
 
 /**
@@ -45,11 +45,11 @@ static void midi_note_off_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 		.note = note,
 		.velocity = velocity,
 	};
-	
+
 	synth_submit_event(&evt);
 
-	LOG_INF("Note Off | Ch: %2d | Note: %3d (%-4s)",
-		channel + 1, note, harm_note_to_text_with_octave(note, false));
+	LOG_INF("Note Off | Ch: %2d | Note: %3d (%-4s)", channel + 1, note,
+		harm_note_to_text_with_octave(note, false));
 }
 
 static struct midi1_serial_callbacks midi_cb = {

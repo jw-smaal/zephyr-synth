@@ -14,7 +14,7 @@
 
 /**
  * @brief Initialize the audio system
- * 
+ *
  * @return 0 on success, negative error code on failure
  */
 int audio_system_init(void);

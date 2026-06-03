@@ -24,17 +24,17 @@ LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 #define MAX_VOICES CONFIG_VOICECARD_VOICES
 
 #if MAX_VOICES <= 1
-  #define MIXER_SHIFT 0
+#define MIXER_SHIFT 0
 #elif MAX_VOICES <= 2
-  #define MIXER_SHIFT 1
+#define MIXER_SHIFT 1
 #elif MAX_VOICES <= 4
-  #define MIXER_SHIFT 2
+#define MIXER_SHIFT 2
 #elif MAX_VOICES <= 8
-  #define MIXER_SHIFT 3
+#define MIXER_SHIFT 3
 #elif MAX_VOICES <= 16
-  #define MIXER_SHIFT 4
+#define MIXER_SHIFT 4
 #else
-  #define MIXER_SHIFT 5
+#define MIXER_SHIFT 5
 #endif
 
 #define PHASE_TO_SINE_SHIFT 17
@@ -46,13 +46,13 @@ K_MSGQ_DEFINE(synth_evt_queue, sizeof(struct synth_event), 32, 4);
  * @brief Represents a single "Voice Card"
  */
 struct voice_card {
-	bool gate_open;             /**< Simple square envelope gate */
-	struct adsr envelope; 	    /**< Each voice sounding has it's own ADSR */
-	uint8_t note;               /**< MIDI note number */
-	q15_t velocity_scale;       /**< Amplitude scale factor (Q15) */
-	uint32_t phase_inc;         /**< 32-bit phase increment */
-	uint32_t phase_acc;         /**< 32-bit phase accumulator */
-	uint32_t age;               /**< Incremented on every Note On to track oldest note */
+	bool gate_open;       /**< Simple square envelope gate */
+	struct adsr envelope; /**< Each voice sounding has it's own ADSR */
+	uint8_t note;         /**< MIDI note number */
+	q15_t velocity_scale; /**< Amplitude scale factor (Q15) */
+	uint32_t phase_inc;   /**< 32-bit phase increment */
+	uint32_t phase_acc;   /**< 32-bit phase accumulator */
+	uint32_t age;         /**< Incremented on every Note On to track oldest note */
 };
 
 /**
@@ -78,9 +78,9 @@ void synth_engine_init(void)
 		m_synth_state.voices[i].age = 0;
 		m_synth_state.voices[i].envelope.state = END;
 		m_synth_state.voices[i].envelope.sustain_level = SUSTAIN_LEVEL;
-		m_synth_state.voices[i].envelope.lifetime = 0; 
-		m_synth_state.voices[i].envelope.initial_lifetime = 0; 
-		m_synth_state.voices[i].envelope.current_gain = 0; 
+		m_synth_state.voices[i].envelope.lifetime = 0;
+		m_synth_state.voices[i].envelope.initial_lifetime = 0;
+		m_synth_state.voices[i].envelope.current_gain = 0;
 	}
 	LOG_INF("Synth Engine Initialized");
 }
@@ -93,14 +93,12 @@ void synth_submit_event(struct synth_event *evt)
 
 #define MS_TO_SAMPLES(ms) (((uint64_t)(ms) * CONFIG_AUDIO_SAMPLE_RATE) / 1000)
 struct adsr_param g_param = {
-	.attack = MS_TO_SAMPLES(500),
+	.attack = MS_TO_SAMPLES(800),
 	.decay = MS_TO_SAMPLES(50),
-	.sustain = MS_TO_SAMPLES(200),
-	.release =  MS_TO_SAMPLES(100),
-	.end = 0, 
+	.sustain = MS_TO_SAMPLES(30000),
+	.release = MS_TO_SAMPLES(1500),
+	.end = 0,
 };
-
-
 
 static void handle_note_on(uint8_t note, uint8_t velocity)
 {
@@ -110,10 +108,10 @@ static void handle_note_on(uint8_t note, uint8_t velocity)
 	for (int i = 0; i < MAX_VOICES; i++) {
 		if (m_synth_state.voices[i].envelope.state == END) {
 			voice_to_use = i;
-			m_synth_state.voices[i].envelope.state = ATTACK; 
+			m_synth_state.voices[i].envelope.state = ATTACK;
 			m_synth_state.voices[i].envelope.lifetime = g_param.attack;
 			m_synth_state.voices[i].envelope.initial_lifetime = g_param.attack;
-			m_synth_state.voices[i].envelope.current_gain = 0; 
+			m_synth_state.voices[i].envelope.current_gain = 0;
 			break;
 		}
 	}
@@ -139,9 +137,11 @@ static void handle_note_on(uint8_t note, uint8_t velocity)
 static void handle_note_off(uint8_t note)
 {
 	for (int i = 0; i < MAX_VOICES; i++) {
-		//if (m_synth_state.voices[i].note == note && m_synth_state.voices[i].gate_open) {
-		if (m_synth_state.voices[i].envelope.state != END) {	
-			// m_synth_state.voices[i].gate_open = false;
+		// if (m_synth_state.voices[i].note == note && m_synth_state.voices[i].gate_open) {
+		if (m_synth_state.voices[i].envelope.state != END) {
+			/* Sample the current gain so Release starts exactly where we left off */
+			m_synth_state.voices[i].envelope.start_gain =
+				m_synth_state.voices[i].envelope.current_gain;
 			m_synth_state.voices[i].envelope.state = RELEASE;
 			m_synth_state.voices[i].envelope.lifetime = g_param.release;
 			m_synth_state.voices[i].envelope.initial_lifetime = g_param.release;
@@ -170,20 +170,23 @@ void synth_engine_render_block(int16_t *buffer, uint32_t samples)
 	process_events();
 
 	for (int v = 0; v < MAX_VOICES; v++) {
-		adsr_process(&m_synth_state.voices[v].envelope, 
-					g_param, 
-					samples,
-					true);
+		adsr_process(&m_synth_state.voices[v].envelope, g_param, samples, true);
 	}
 
 	for (uint32_t i = 0; i < samples; i++) {
 		int32_t accumulator = 0;
 		for (int v = 0; v < MAX_VOICES; v++) {
 			if (m_synth_state.voices[v].envelope.state != END) {
-				q15_t sine = arm_sin_q15((q15_t)(m_synth_state.voices[v].phase_acc >> PHASE_TO_SINE_SHIFT));
-				int32_t sample_vol = (m_synth_state.voices[v].velocity_scale * m_synth_state.voices[v].envelope.current_gain) >> 15;
-				accumulator += (int32_t)((int32_t)sine * sample_vol)>>15;
-				m_synth_state.voices[v].phase_acc += m_synth_state.voices[v].phase_inc;
+				q15_t sine =
+					arm_sin_q15((q15_t)(m_synth_state.voices[v].phase_acc >>
+							    PHASE_TO_SINE_SHIFT));
+				int32_t sample_vol =
+					(m_synth_state.voices[v].velocity_scale *
+					 m_synth_state.voices[v].envelope.current_gain) >>
+					15;
+				accumulator += (int32_t)((int32_t)sine * sample_vol) >> 15;
+				m_synth_state.voices[v].phase_acc +=
+					m_synth_state.voices[v].phase_inc;
 
 			} else {
 				m_synth_state.voices[v].phase_acc = 0;

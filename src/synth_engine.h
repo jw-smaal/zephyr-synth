@@ -33,7 +33,7 @@ struct synth_event {
 
 /**
  * @brief Submit an event to the synthesizer core
- * 
+ *
  * @param evt Pointer to the event structure to submit
  */
 void synth_submit_event(struct synth_event *evt);
@@ -45,7 +45,7 @@ void synth_engine_init(void);
 
 /**
  * @brief Render a block of audio samples
- * 
+ *
  * @param buffer Output buffer (interleaved stereo)
  * @param samples Number of samples per channel to render
  */

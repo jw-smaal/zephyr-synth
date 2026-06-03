@@ -14,7 +14,7 @@
 
 /**
  * @brief Initialize the MIDI input system
- * 
+ *
  * @return 0 on success, negative error code on failure
  */
 int midi_system_init(void);
