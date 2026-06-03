@@ -137,8 +137,8 @@ static void handle_note_on(uint8_t note, uint8_t velocity)
 static void handle_note_off(uint8_t note)
 {
 	for (int i = 0; i < MAX_VOICES; i++) {
-		// if (m_synth_state.voices[i].note == note && m_synth_state.voices[i].gate_open) {
-		if (m_synth_state.voices[i].envelope.state != END) {
+		if (m_synth_state.voices[i].note == note &&
+		    m_synth_state.voices[i].envelope.state != END) {
 			/* Sample the current gain so Release starts exactly where we left off */
 			m_synth_state.voices[i].envelope.start_gain =
 				m_synth_state.voices[i].envelope.current_gain;
