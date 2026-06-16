@@ -42,13 +42,27 @@ static void rx_sink_thread_fn(void *p1, void *p2, void *p3)
 		if (ret == 0) {
 			k_mem_slab_free(&rx_slab, rx_buffer);
 		} else {
-			/* If no data yet, yield briefly */
-			k_sleep(K_MSEC(1));
+			if (ret == -EAGAIN) {
+				/* Non-blocking timeout or no data: yield and retry */
+				k_sleep(K_MSEC(1));
+				continue;
+			}
+
+			/* For any other error (e.g. overrun/EIO), drop and restart the stream */
+			LOG_WRN("I2S RX error %d — resetting RX stream", ret);
+			i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_DROP);
+
+			/* Attempt to restart RX stream */
+			ret = i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_START);
+			if (ret < 0) {
+				LOG_ERR("Failed to restart I2S RX: %d", ret);
+				k_sleep(K_MSEC(10));
+			}
 		}
 	}
 }
 
-K_THREAD_DEFINE(rx_sink_tid, 1024, rx_sink_thread_fn, NULL, NULL, NULL, -1, 0, K_TICKS_FOREVER);
+K_THREAD_DEFINE(rx_sink_tid, 1024, rx_sink_thread_fn, NULL, NULL, NULL, -3, 0, K_TICKS_FOREVER);
 
 int main(void)
 {

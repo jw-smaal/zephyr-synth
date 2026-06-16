@@ -38,6 +38,9 @@ LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 #define MIXER_SHIFT 5
 #endif
 
+/** @brief Control rate period in samples (determines ADSR update frequency) */
+#define CONTROL_RATE_PERIOD 16U
+
 /* Event Queue for Synthesizer Core */
 K_MSGQ_DEFINE(synth_evt_queue, sizeof(struct synth_event), 32, 4);
 
@@ -425,36 +428,45 @@ void synth_engine_render_block(int16_t *buffer, uint32_t samples)
 	int patch_idx = (int)atomic_get(&m_synth_state.active_patch_idx);
 	const struct patch *active_patch = &g_patches[patch_idx];
 
-	/* Process the ADSR values for all voices */
-	for (int v = 0; v < MAX_VOICES; v++) {
-		adsr_process(&m_synth_state.voices[v].envelope, active_patch->env, samples, true);
-	}
+	uint32_t rendered = 0;
+	while (rendered < samples) {
+		uint32_t chunk = MIN(CONTROL_RATE_PERIOD, samples - rendered);
 
-	for (uint32_t i = 0; i < samples; i++) {
-		int32_t accumulator_l = 0;
-		int32_t accumulator_r = 0;
-
+		/* Process the ADSR values for all voices at the control rate */
 		for (int v = 0; v < MAX_VOICES; v++) {
-			struct voice_card *v_ptr = &m_synth_state.voices[v];
-
-			if (v_ptr->envelope.state != END) {
-				uint16_t lut_idx = (uint16_t)(v_ptr->phase_acc >> WAVE_LUT_SHIFT);
-				q15_t raw_sample = wave_table[v_ptr->wave][lut_idx];
-
-				v_ptr->phase_acc += v_ptr->phase_inc;
-
-				int32_t sample_vol = (v_ptr->velocity_scale * v_ptr->envelope.current_gain) >> 15;
-				int32_t mono_sample = ((int32_t)raw_sample * sample_vol) >> 15;
-
-				accumulator_l += (mono_sample * v_ptr->pan_l) >> 15;
-				accumulator_r += (mono_sample * v_ptr->pan_r) >> 15;
-			} else {
-				v_ptr->phase_acc = 0;
-			}
+			adsr_process(&m_synth_state.voices[v].envelope, active_patch->env, chunk, true);
 		}
 
-		/* Clamp the stereo channels and write to interleaved buffer */
-		buffer[i * 2] = (q15_t)CLAMP(accumulator_l >> MIXER_SHIFT, -32768, 32767);
-		buffer[i * 2 + 1] = (q15_t)CLAMP(accumulator_r >> MIXER_SHIFT, -32768, 32767);
+		/* Render audio samples for the current control period */
+		for (uint32_t i = 0; i < chunk; i++) {
+			int32_t accumulator_l = 0;
+			int32_t accumulator_r = 0;
+			uint32_t buf_idx = rendered + i;
+
+			for (int v = 0; v < MAX_VOICES; v++) {
+				struct voice_card *v_ptr = &m_synth_state.voices[v];
+
+				if (v_ptr->envelope.state != END) {
+					uint16_t lut_idx = (uint16_t)(v_ptr->phase_acc >> WAVE_LUT_SHIFT);
+					q15_t raw_sample = wave_table[v_ptr->wave][lut_idx];
+
+					v_ptr->phase_acc += v_ptr->phase_inc;
+
+					int32_t sample_vol = (v_ptr->velocity_scale * v_ptr->envelope.current_gain) >> 15;
+					int32_t mono_sample = ((int32_t)raw_sample * sample_vol) >> 15;
+
+					accumulator_l += (mono_sample * v_ptr->pan_l) >> 15;
+					accumulator_r += (mono_sample * v_ptr->pan_r) >> 15;
+				} else {
+					v_ptr->phase_acc = 0;
+				}
+			}
+
+			/* Clamp the stereo channels and write to interleaved buffer */
+			buffer[buf_idx * 2] = (q15_t)CLAMP(accumulator_l >> MIXER_SHIFT, -32768, 32767);
+			buffer[buf_idx * 2 + 1] = (q15_t)CLAMP(accumulator_r >> MIXER_SHIFT, -32768, 32767);
+		}
+
+		rendered += chunk;
 	}
 }
