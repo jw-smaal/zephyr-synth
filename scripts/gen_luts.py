@@ -2,31 +2,55 @@ import sys
 import math
 
 def harm_note_to_freq(note):
-    # MIDI note 69 is A4 (440Hz)
+    """MIDI note 69 is A4 (440 Hz)."""
     return 440.0 * math.pow(2.0, (note - 69) / 12.0)
+
+WAVE_LUT_SIZE = 2048
 
 def main():
     if len(sys.argv) != 3:
         print("Usage: gen_luts.py <sample_rate> <output_file>")
         sys.exit(1)
 
-    sample_rate = float(sys.argv[1])
-    output_file = sys.argv[2]
-
+    sample_rate  = float(sys.argv[1])
+    output_file  = sys.argv[2]
     phase_factor = 4294967296.0 / sample_rate
 
     phase_inc_lut = []
     for note in range(128):
-        freq = harm_note_to_freq(note)
+        freq      = harm_note_to_freq(note)
         phase_inc = int(freq * phase_factor)
         phase_inc_lut.append(phase_inc)
 
     velocity_lut = [0]
     for vel in range(1, 128):
-        db = -30.0 + (((vel - 1) / 126.0) * 30.0)
-        linear = math.pow(10.0, db / 20.0)
+        db      = -30.0 + (((vel - 1) / 126.0) * 30.0)
+        linear  = math.pow(10.0, db / 20.0)
         q15_val = int(linear * 32767.0)
         velocity_lut.append(q15_val)
+
+    N = WAVE_LUT_SIZE
+
+    # Sine
+    wave_sine = [int(math.sin(2.0 * math.pi * i / N) * 32767.0) for i in range(N)]
+
+    # Sawtooth: -32767 at i=0, +32767 at i=N-1
+    wave_saw = [int(-32767.0 + (2.0 * 32767.0 * i) / (N - 1)) for i in range(N)]
+
+    # Square: -32767 first half, +32767 second half
+    wave_square = [-32767 if i < N // 2 else 32767 for i in range(N)]
+
+    # Triangle: 0 -> +32767 -> 0 -> -32767 -> 0
+    wave_tri = []
+    for i in range(N):
+        if i < N // 4:
+            wave_tri.append(int(32767.0 * 4.0 * i / N))
+        elif i < 3 * N // 4:
+            wave_tri.append(int(32767.0 * (2.0 - 4.0 * i / N)))
+        else:
+            wave_tri.append(int(32767.0 * (4.0 * i / N - 4.0)))
+
+    shift = 32 - int(math.log2(N))
 
     with open(output_file, 'w') as f:
         f.write("/*\n")
@@ -35,20 +59,34 @@ def main():
         f.write(" */\n\n")
         f.write("#ifndef SYNTH_LUTS_GENERATED_H\n")
         f.write("#define SYNTH_LUTS_GENERATED_H\n\n")
-        f.write("#include <stdint.h>\n")
-        f.write("#include <arm_math.h>\n\n")
-        
+        f.write("#include <stdint.h>\n\n")
+
+        f.write(f"/** Number of entries in each waveform lookup table */\n")
+        f.write(f"#define WAVE_LUT_SIZE  {N}U\n")
+        f.write(f"/** Right-shift applied to the 32-bit phase accumulator to obtain the table index */\n")
+        f.write(f"#define WAVE_LUT_SHIFT {shift}U\n\n")
+
         f.write("static const uint32_t phase_inc_lut[128] = {\n")
         for i in range(0, 128, 8):
             chunk = phase_inc_lut[i:i+8]
             f.write("    " + ", ".join(f"{val}U" for val in chunk) + ",\n")
         f.write("};\n\n")
 
-        f.write("static const q15_t velocity_lut[128] = {\n")
+        f.write("static const int16_t velocity_lut[128] = {\n")
         for i in range(0, 128, 8):
             chunk = velocity_lut[i:i+8]
             f.write("    " + ", ".join(f"{val}" for val in chunk) + ",\n")
         f.write("};\n\n")
+
+        for name, table in [("sine",   wave_sine),
+                             ("saw",    wave_saw),
+                             ("square", wave_square),
+                             ("tri",    wave_tri)]:
+            f.write(f"static const int16_t wave_lut_{name}[WAVE_LUT_SIZE] = {{\n")
+            for i in range(0, N, 8):
+                chunk = table[i:i+8]
+                f.write("    " + ", ".join(f"{val}" for val in chunk) + ",\n")
+            f.write("};\n\n")
 
         f.write("#endif /* SYNTH_LUTS_GENERATED_H */\n")
 

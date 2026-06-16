@@ -48,16 +48,16 @@ static void sw2_pressed(const struct device *dev,
 			uint32_t pins)
 {
 	struct synth_event evt;
-	enum synth_wave next;
+	int next;
 
 	ARG_UNUSED(dev);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
 
-	next = (enum synth_wave)((synth_get_active_wave() + 1) % SYNTH_WAVE_COUNT);
+	next = (synth_get_active_patch_idx() + 1) % synth_get_patch_count();
 
-	evt.type = SYNTH_EVT_SET_WAVE;
-	evt.wave = next;
+	evt.type = SYNTH_EVT_SET_PATCH;
+	evt.patch_idx = (uint8_t)next;
 	evt.note = 0;
 	evt.velocity = 0;
 
