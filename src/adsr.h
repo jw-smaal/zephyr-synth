@@ -48,7 +48,23 @@ struct adsr {
 	uint32_t initial_lifetime;
 	q15_t current_gain; /* This is calculated inside adsr_process */
 	q15_t start_gain;   /* Gain at the start of the current phase */
+	int32_t gain_accum; /**< Q16.16 accumulator for current gain */
+	int32_t gain_step;  /**< Q16.16 gain change per sample */
 };
+
+/**
+ * @brief Trigger the note-on event for the ADSR envelope
+ * @param padsr Pointer to the ADSR state structure
+ * @param param ADSR parameter configuration
+ */
+void adsr_trigger_on(struct adsr *padsr, struct adsr_param param);
+
+/**
+ * @brief Trigger the note-off event for the ADSR envelope
+ * @param padsr Pointer to the ADSR state structure
+ * @param param ADSR parameter configuration
+ */
+void adsr_trigger_off(struct adsr *padsr, struct adsr_param param);
 
 enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param adsr_param,
 			     uint32_t delta_samples, bool use_log);

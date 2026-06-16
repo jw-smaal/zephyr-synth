@@ -266,10 +266,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 			for (int i = 0; i < MAX_VOICES; i++) {
 				if (m_synth_state.voices[i].envelope.state == END) {
 					voice_to_use = i;
-					m_synth_state.voices[i].envelope.state = ATTACK;
-					m_synth_state.voices[i].envelope.lifetime = p->env.attack;
-					m_synth_state.voices[i].envelope.initial_lifetime = p->env.attack;
-					m_synth_state.voices[i].envelope.current_gain = 0;
+					adsr_trigger_on(&m_synth_state.voices[i].envelope, p->env);
 					break;
 				}
 			}
@@ -309,10 +306,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 
 			/* Reset envelope state if voice was stolen */
 			if (needs_reset && voice_to_use != -1) {
-				m_synth_state.voices[voice_to_use].envelope.state = ATTACK;
-				m_synth_state.voices[voice_to_use].envelope.lifetime = p->env.attack;
-				m_synth_state.voices[voice_to_use].envelope.initial_lifetime = p->env.attack;
-				m_synth_state.voices[voice_to_use].envelope.current_gain = 0;
+				adsr_trigger_on(&m_synth_state.voices[voice_to_use].envelope, p->env);
 			}
 
 			if (voice_to_use != -1) {
@@ -357,11 +351,7 @@ static void handle_note_off(uint8_t note)
 	for (int i = 0; i < MAX_VOICES; i++) {
 		struct voice_card *v_ptr = &m_synth_state.voices[i];
 		if (v_ptr->note == note && v_ptr->envelope.state != END) {
-			/* Sample current gain to start release phase smoothly */
-			v_ptr->envelope.start_gain = v_ptr->envelope.current_gain;
-			v_ptr->envelope.state = RELEASE;
-			v_ptr->envelope.lifetime = active_patch->env.release;
-			v_ptr->envelope.initial_lifetime = active_patch->env.release;
+			adsr_trigger_off(&v_ptr->envelope, active_patch->env);
 			LOG_DBG("Voice Off: Note %d -> Slot %d (Active: %d/%d)",
 				note, i, count_active_voices(), MAX_VOICES);
 		}
