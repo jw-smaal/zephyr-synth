@@ -63,10 +63,17 @@ struct voice_card {
 struct synth_state {
 	struct voice_card voices[MAX_VOICES];
 	uint32_t note_counter;
+	/*
+	 * active_wave is written by the audio thread (via process_events) and
+	 * read by the MIDI thread (via synth_get_active_wave).  atomic_t makes
+	 * this cross-thread access formally correct without requiring a mutex.
+	 */
+	atomic_t active_wave; /**< Global waveform selection (atomic) */
 };
 
 static struct synth_state m_synth_state = {
 	.note_counter = 0,
+	.active_wave  = ATOMIC_INIT(SYNTH_WAVE_SAW),
 };
 
 #define FULL_LEVEL    UINT8_MAX
@@ -85,6 +92,7 @@ void synth_engine_init(void)
 		m_synth_state.voices[i].envelope.initial_lifetime = 0;
 		m_synth_state.voices[i].envelope.current_gain = 0;
 	}
+	atomic_set(&m_synth_state.active_wave, SYNTH_WAVE_SAW);
 	LOG_INF("Synth Engine Initialized");
 }
 
@@ -95,7 +103,7 @@ void synth_submit_event(struct synth_event *evt)
 }
 
 #define MS_TO_SAMPLES(ms) (((uint64_t)(ms) * CONFIG_AUDIO_SAMPLE_RATE) / 1000)
-struct adsr_param g_param = {
+static struct adsr_param g_param = {
 	.attack = MS_TO_SAMPLES(20),
 	.decay = MS_TO_SAMPLES(50),
 	.sustain = 0xffffffff,
@@ -116,9 +124,14 @@ static int count_active_voices(void)
 
 static void handle_note_on(uint8_t note, uint8_t velocity, enum synth_wave wave)
 {
-	int voice_to_use = -1;
-	uint32_t oldest_age = 0xFFFFFFFF;
+	int voice_to_use  = -1;
+	int stolen_voice  = -1;
+	bool needs_reset  = false;
 
+	/*
+	 * Pass 1: find a fully silent (END) slot.
+	 * No audible artefact; preferred path.
+	 */
 	for (int i = 0; i < MAX_VOICES; i++) {
 		if (m_synth_state.voices[i].envelope.state == END) {
 			voice_to_use = i;
@@ -130,13 +143,54 @@ static void handle_note_on(uint8_t note, uint8_t velocity, enum synth_wave wave)
 		}
 	}
 
+	/*
+	 * Pass 2: find the quietest voice in RELEASE.
+	 * Stealing the voice nearest to silence minimises the audible click.
+	 */
 	if (voice_to_use == -1) {
+		q15_t min_gain = INT16_MAX;
+
 		for (int i = 0; i < MAX_VOICES; i++) {
-			if (m_synth_state.voices[i].age < oldest_age) {
-				oldest_age = m_synth_state.voices[i].age;
-				voice_to_use = i;
+			if (m_synth_state.voices[i].envelope.state == RELEASE &&
+			    m_synth_state.voices[i].envelope.current_gain < min_gain) {
+				min_gain     = m_synth_state.voices[i].envelope.current_gain;
+				stolen_voice = i;
 			}
 		}
+		if (stolen_voice != -1) {
+			voice_to_use = stolen_voice;
+			needs_reset  = true;
+		}
+	}
+
+	/*
+	 * Pass 3: last resort — steal the oldest held note (lowest age
+	 * counter). Any state (ATTACK, DECAY, SUSTAIN) may be picked here.
+	 */
+	if (voice_to_use == -1) {
+		uint32_t oldest_age = 0xFFFFFFFF;
+
+		for (int i = 0; i < MAX_VOICES; i++) {
+			if (m_synth_state.voices[i].age < oldest_age) {
+				oldest_age   = m_synth_state.voices[i].age;
+				stolen_voice = i;
+			}
+		}
+		if (stolen_voice != -1) {
+			voice_to_use = stolen_voice;
+			needs_reset  = true;
+		}
+	}
+
+	/*
+	 * Any stolen voice (passes 2 and 3) must have its envelope
+	 * re-initialised to ATTACK so the new note starts cleanly.
+	 */
+	if (needs_reset && voice_to_use != -1) {
+		m_synth_state.voices[voice_to_use].envelope.state = ATTACK;
+		m_synth_state.voices[voice_to_use].envelope.lifetime = g_param.attack;
+		m_synth_state.voices[voice_to_use].envelope.initial_lifetime = g_param.attack;
+		m_synth_state.voices[voice_to_use].envelope.current_gain = 0;
 	}
 
 	if (voice_to_use != -1) {
@@ -170,6 +224,25 @@ static void handle_note_off(uint8_t note)
 	}
 }
 
+static void handle_set_wave(enum synth_wave wave)
+{
+	const char *names[] = { "SINE", "SAW" };
+
+	atomic_set(&m_synth_state.active_wave, (atomic_val_t)wave);
+
+	/*
+	 * Propagate to all currently active voices so the timbre changes
+	 * immediately without waiting for the next Note On.
+	 */
+	for (int i = 0; i < MAX_VOICES; i++) {
+		if (m_synth_state.voices[i].envelope.state != END) {
+			m_synth_state.voices[i].wave = wave;
+		}
+	}
+	LOG_INF("Waveform -> %s",
+		(wave < SYNTH_WAVE_COUNT) ? names[wave] : "UNKNOWN");
+}
+
 static void process_events(void)
 {
 	struct synth_event evt;
@@ -178,8 +251,15 @@ static void process_events(void)
 			handle_note_on(evt.note, evt.velocity, evt.wave);
 		} else if (evt.type == SYNTH_EVT_NOTE_OFF) {
 			handle_note_off(evt.note);
+		} else if (evt.type == SYNTH_EVT_SET_WAVE) {
+			handle_set_wave(evt.wave);
 		}
 	}
+}
+
+enum synth_wave synth_get_active_wave(void)
+{
+	return (enum synth_wave)atomic_get(&m_synth_state.active_wave);
 }
 
 void synth_engine_render_block(int16_t *buffer, uint32_t samples)

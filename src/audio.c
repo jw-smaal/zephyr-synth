@@ -85,7 +85,7 @@ int audio_system_init(void)
 	conf.format = I2S_FMT_DATA_FORMAT_I2S;
 	conf.options = I2S_OPT_BIT_CLK_CONTROLLER | I2S_OPT_FRAME_CLK_CONTROLLER;
 	conf.frame_clk_freq = CONFIG_AUDIO_SAMPLE_RATE;
-	conf.block_size = 128 * 2 * (CONFIG_AUDIO_BIT_WIDTH / 8);
+	conf.block_size = SAMPLES_PER_BLOCK * CHANNELS * sizeof(int16_t);
 	conf.timeout = 2000;
 	conf.mem_slab = &audio_slab;
 

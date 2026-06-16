@@ -73,20 +73,27 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 	 */
 	switch (padsr->state) {
 	case ATTACK:
-		/* Start at zero ramp up to FULL_LEVEL */
-		padsr->current_gain =
-			(q15_t)(((padsr->initial_lifetime - padsr->lifetime) * 32767U) /
-				padsr->initial_lifetime);
+		/* Start at zero, ramp up to full level */
+		if (padsr->initial_lifetime == 0) {
+			/* Zero attack time: snap immediately to full gain */
+			padsr->current_gain = 32767;
+		} else {
+			padsr->current_gain =
+				(q15_t)(((padsr->initial_lifetime - padsr->lifetime) * 32767U) /
+					padsr->initial_lifetime);
+		}
 		break;
 	case DECAY: {
-		/* Start at start_gain go down to SUSTAIN level */
-		if (padsr->start_gain > padsr->sustain_level) {
+		/* Start at start_gain, ramp down to sustain level */
+		if (padsr->initial_lifetime == 0 ||
+		    padsr->start_gain <= padsr->sustain_level) {
+			/* Zero decay time or already at sustain: snap to sustain */
+			padsr->current_gain = padsr->sustain_level;
+		} else {
 			uint32_t distance = padsr->start_gain - padsr->sustain_level;
 			padsr->current_gain = padsr->sustain_level +
 					      (q15_t)(((uint64_t)distance * padsr->lifetime) /
 						      padsr->initial_lifetime);
-		} else {
-			padsr->current_gain = padsr->sustain_level;
 		}
 		break;
 	}
@@ -95,9 +102,15 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 		padsr->current_gain = padsr->sustain_level;
 		break;
 	case RELEASE:
-		/* Start at start_gain and end at zero */
-		padsr->current_gain = (q15_t)(((uint64_t)padsr->lifetime * padsr->start_gain) /
-					      padsr->initial_lifetime);
+		/* Start at start_gain and ramp down to zero */
+		if (padsr->initial_lifetime == 0) {
+			/* Zero release time: snap immediately to silence */
+			padsr->current_gain = 0;
+		} else {
+			padsr->current_gain =
+				(q15_t)(((uint64_t)padsr->lifetime * padsr->start_gain) /
+					padsr->initial_lifetime);
+		}
 		break;
 	case END:
 		padsr->current_gain = 0;

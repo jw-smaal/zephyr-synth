@@ -15,6 +15,7 @@
 #include "audio.h"
 #include "synth_engine.h"
 #include "midi_handler.h"
+#include "waveform_selector.h"
 
 LOG_MODULE_REGISTER(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -99,6 +100,13 @@ int main(void)
 	ret = midi_system_init();
 	if (ret < 0) {
 		LOG_ERR("MIDI system initialization failed: %d", ret);
+		return ret;
+	}
+
+	/* Initialize waveform selector (SW2) */
+	ret = waveform_selector_init();
+	if (ret < 0) {
+		LOG_ERR("Waveform selector initialization failed: %d", ret);
 		return ret;
 	}
 

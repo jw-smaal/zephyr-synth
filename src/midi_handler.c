@@ -27,7 +27,7 @@ static void midi_note_on_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 		.type = SYNTH_EVT_NOTE_ON,
 		.note = note,
 		.velocity = velocity,
-		.wave = SYNTH_WAVE_SAW,
+		.wave = synth_get_active_wave(),
 	};
 
 	synth_submit_event(&evt);

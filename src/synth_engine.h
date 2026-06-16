@@ -20,6 +20,7 @@
 enum synth_event_type {
 	SYNTH_EVT_NOTE_ON,
 	SYNTH_EVT_NOTE_OFF,
+	SYNTH_EVT_SET_WAVE, /**< Change the global active waveform */
 };
 
 /** 
@@ -28,6 +29,7 @@ enum synth_event_type {
 enum synth_wave {
 	SYNTH_WAVE_SINE,
 	SYNTH_WAVE_SAW,
+	SYNTH_WAVE_COUNT, /**< Sentinel — number of waveforms; do not use as a waveform */
 };
 
 /**
@@ -59,5 +61,12 @@ void synth_engine_init(void);
  * @param samples Number of samples per channel to render
  */
 void synth_engine_render_block(int16_t *buffer, uint32_t samples);
+
+/**
+ * @brief Return the currently active global waveform
+ *
+ * @return The active @ref synth_wave value
+ */
+enum synth_wave synth_get_active_wave(void);
 
 #endif /* SYNTH_ENGINE_H */
