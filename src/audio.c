@@ -50,10 +50,21 @@ static void audio_thread_fn(void *p1, void *p2, void *p3)
 		ret = i2s_write(i2s_dev, tx_buffer, FRAME_SIZE);
 		if (ret < 0) {
 			k_mem_slab_free(&audio_slab, tx_buffer);
-			if (ret != -EAGAIN) {
-				LOG_ERR("I2S write failed: %d", ret);
-				break;
+			if (ret == -EAGAIN) {
+				/* TX queue full: drop this frame and retry */
+				continue;
 			}
+			/*
+			 * Any other error (e.g. -EIO from an underrun) means the
+			 * I2S TX pipeline has stopped.  Issue DROP to flush it back
+			 * to a known idle state, reset the started flag so the next
+			 * successful write re-triggers the peripheral, and continue.
+			 * The thread must never exit permanently.
+			 */
+			LOG_WRN("I2S write error %d — dropping TX pipeline, restarting",
+				ret);
+			i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
+			started = false;
 			continue;
 		}
 

@@ -19,7 +19,7 @@
 
 LOG_MODULE_REGISTER(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 
-K_MEM_SLAB_DEFINE_STATIC(rx_slab, 512, 4, 32); /**< Dummy for clock generator */
+K_MEM_SLAB_DEFINE_STATIC(rx_slab, 512, 16, 32); /**< Dummy for clock generator */
 
 static const struct device *const i2s_dev = DEVICE_DT_GET(DT_ALIAS(i2s_tx));
 

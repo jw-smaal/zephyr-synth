@@ -6,6 +6,7 @@
 / {
 	aliases {
 		i2s-tx = &sai1;
+		sw2    = &user_button_2;
 	};
 
 	midi0: midi0 {
@@ -13,6 +14,11 @@
 		compatible = "midi1_serial";
 		uart = <&flexcomm2_lpuart2>;
 	};
+};
+
+/* Enable SW2 (defined but disabled in the upstream board DTSI) */
+&user_button_2 {
+	status = "okay";
 };
 
 &sai1 {
