@@ -226,6 +226,7 @@ void synth_submit_event(struct synth_event *evt)
 static int count_active_voices(void)
 {
 	int active = 0;
+
 	for (int i = 0; i < MAX_VOICES; i++) {
 		if (m_synth_state.voices[i].envelope.state != END) {
 			active++;
@@ -249,6 +250,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 
 	for (uint8_t l = 0; l < p->layer_count; l++) {
 		int shifted_note = (int)note + (int)p->octave_shift[l] * 12;
+
 		if (shifted_note < 0) {
 			shifted_note = 0;
 		} else if (shifted_note > 127) {
@@ -311,6 +313,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 
 			if (voice_to_use != -1) {
 				int32_t cents = 0;
+
 				if (p->unison_count > 1) {
 					cents = -p->detune_cents / 2 + (p->detune_cents * u) / (p->unison_count - 1);
 				}
@@ -318,6 +321,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 				uint32_t phase_inc_detuned = (uint32_t)(((uint64_t)base_phase_inc * (1731 + cents)) / 1731);
 
 				q15_t pan_l, pan_r;
+
 				if (p->unison_count > 1) {
 					pan_r = (q15_t)((u * 32767) / (p->unison_count - 1));
 					pan_l = 32767 - pan_r;
@@ -350,6 +354,7 @@ static void handle_note_off(uint8_t note)
 
 	for (int i = 0; i < MAX_VOICES; i++) {
 		struct voice_card *v_ptr = &m_synth_state.voices[i];
+
 		if (v_ptr->note == note && v_ptr->envelope.state != END) {
 			adsr_trigger_off(&v_ptr->envelope, active_patch->env);
 			LOG_DBG("Voice Off: Note %d -> Slot %d (Active: %d/%d)",
@@ -383,6 +388,7 @@ static void handle_set_patch(uint8_t patch_idx)
 static void process_events(void)
 {
 	struct synth_event evt;
+
 	while (k_msgq_get(&synth_evt_queue, &evt, K_NO_WAIT) == 0) {
 		if (evt.type == SYNTH_EVT_NOTE_ON) {
 			handle_note_on(evt.note, evt.velocity, evt.patch_idx);
@@ -422,6 +428,7 @@ void synth_engine_render_block(int16_t *buffer, uint32_t samples)
 	const struct patch *active_patch = &g_patches[patch_idx];
 
 	uint32_t rendered = 0;
+
 	while (rendered < samples) {
 		uint32_t chunk = MIN(CONTROL_RATE_PERIOD, samples - rendered);
 

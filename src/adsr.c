@@ -69,6 +69,7 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 			padsr->gain_accum = (int32_t)padsr->start_gain << 16;
 			if (param.decay > 0) {
 				int32_t target_gain = padsr->sustain_level;
+
 				padsr->gain_step = ((target_gain - padsr->start_gain) << 16) / (int32_t)param.decay;
 			} else {
 				padsr->gain_step = 0;
