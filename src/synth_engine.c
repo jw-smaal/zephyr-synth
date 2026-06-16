@@ -34,6 +34,8 @@ LOG_MODULE_DECLARE(midi_synth, CONFIG_LOG_DEFAULT_LEVEL);
 #define MIXER_SHIFT 3
 #elif MAX_VOICES <= 16
 #define MIXER_SHIFT 4
+#elif MAX_VOICES <= 32
+#define MIXER_SHIFT 5
 #else
 #define MIXER_SHIFT 5
 #endif
@@ -274,11 +276,11 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 
 			/* Pass 2: find the quietest voice in RELEASE */
 			if (voice_to_use == -1) {
-				q15_t min_gain = INT16_MAX;
+				int32_t min_gain = 32768;
 
 				for (int i = 0; i < MAX_VOICES; i++) {
 					if (m_synth_state.voices[i].envelope.state == RELEASE &&
-					    m_synth_state.voices[i].envelope.current_gain < min_gain) {
+					    (int32_t)m_synth_state.voices[i].envelope.current_gain < min_gain) {
 						min_gain = m_synth_state.voices[i].envelope.current_gain;
 						stolen_voice = i;
 					}
@@ -294,7 +296,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 				uint32_t oldest_age = 0xFFFFFFFF;
 
 				for (int i = 0; i < MAX_VOICES; i++) {
-					if (m_synth_state.voices[i].age < oldest_age) {
+					if (m_synth_state.voices[i].age <= oldest_age) {
 						oldest_age = m_synth_state.voices[i].age;
 						stolen_voice = i;
 					}
@@ -333,6 +335,7 @@ static void handle_note_on(uint8_t note, uint8_t velocity, uint8_t patch_idx)
 				m_synth_state.voices[voice_to_use].note = note;
 				m_synth_state.voices[voice_to_use].wave = p->wave[l];
 				m_synth_state.voices[voice_to_use].phase_inc = phase_inc_detuned;
+				m_synth_state.voices[voice_to_use].phase_acc = 0;
 				m_synth_state.voices[voice_to_use].velocity_scale = velocity_lut[velocity & 0x7F];
 				m_synth_state.voices[voice_to_use].gate_open = true;
 				m_synth_state.voices[voice_to_use].age = ++m_synth_state.note_counter;
@@ -359,7 +362,7 @@ static void handle_note_off(uint8_t note)
 			v_ptr->envelope.state = RELEASE;
 			v_ptr->envelope.lifetime = active_patch->env.release;
 			v_ptr->envelope.initial_lifetime = active_patch->env.release;
-			LOG_INF("Voice Off: Note %d -> Slot %d (Active: %d/%d)",
+			LOG_DBG("Voice Off: Note %d -> Slot %d (Active: %d/%d)",
 				note, i, count_active_voices(), MAX_VOICES);
 		}
 		if (v_ptr->envelope.state == END) {

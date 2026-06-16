@@ -32,7 +32,7 @@ static void midi_note_on_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 
 	synth_submit_event(&evt);
 
-	LOG_INF("Note On  | Ch: %2d | Note: %3d (%-4s) | Vel: %3d", channel + 1, note,
+	LOG_DBG("Note On  | Ch: %2d | Note: %3d (%-4s) | Vel: %3d", channel + 1, note,
 		harm_note_to_text_with_octave(note, false), velocity);
 }
 
@@ -49,7 +49,7 @@ static void midi_note_off_cb(uint8_t channel, uint8_t note, uint8_t velocity)
 
 	synth_submit_event(&evt);
 
-	LOG_INF("Note Off | Ch: %2d | Note: %3d (%-4s)", channel + 1, note,
+	LOG_DBG("Note Off | Ch: %2d | Note: %3d (%-4s)", channel + 1, note,
 		harm_note_to_text_with_octave(note, false));
 }
 
@@ -73,7 +73,7 @@ static void midi_thread_fn(void *p1, void *p2, void *p3)
 	}
 }
 
-K_THREAD_DEFINE(midi_tid, 1024, midi_thread_fn, NULL, NULL, NULL, 5, 0, K_TICKS_FOREVER);
+K_THREAD_DEFINE(midi_tid, 1024, midi_thread_fn, NULL, NULL, NULL, 0, 0, K_TICKS_FOREVER);
 
 int midi_system_init(void)
 {

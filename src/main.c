@@ -23,6 +23,22 @@ K_MEM_SLAB_DEFINE_STATIC(rx_slab, 512, 16, 32); /**< Dummy for clock generator *
 
 static const struct device *const i2s_dev = DEVICE_DT_GET(DT_ALIAS(i2s_tx));
 
+static int configure_rx(void)
+{
+	struct i2s_config conf;
+
+	conf.word_size = CONFIG_AUDIO_BIT_WIDTH;
+	conf.channels = 2;
+	conf.format = I2S_FMT_DATA_FORMAT_I2S;
+	conf.options = I2S_OPT_BIT_CLK_CONTROLLER | I2S_OPT_FRAME_CLK_CONTROLLER;
+	conf.frame_clk_freq = CONFIG_AUDIO_SAMPLE_RATE;
+	conf.block_size = 128 * 2 * (CONFIG_AUDIO_BIT_WIDTH / 8);
+	conf.timeout = 50;
+	conf.mem_slab = &rx_slab;
+
+	return i2s_configure(i2s_dev, I2S_DIR_RX, &conf);
+}
+
 /**
  * @brief RX Sink Thread
  * Drains the dummy RX queue to keep clock generation running without ENOMEM.
@@ -42,15 +58,13 @@ static void rx_sink_thread_fn(void *p1, void *p2, void *p3)
 		if (ret == 0) {
 			k_mem_slab_free(&rx_slab, rx_buffer);
 		} else {
-			if (ret == -EAGAIN) {
-				/* Non-blocking timeout or no data: yield and retry */
-				k_sleep(K_MSEC(1));
-				continue;
-			}
-
-			/* For any other error (e.g. overrun/EIO), drop and restart the stream */
+			/* For any error (including -EAGAIN from a timeout or -EIO from overrun), drop and restart the stream */
 			LOG_WRN("I2S RX error %d — resetting RX stream", ret);
 			i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_DROP);
+			ret = configure_rx();
+			if (ret < 0) {
+				LOG_ERR("I2S RX reconfigure failed: %d", ret);
+			}
 
 			/* Attempt to restart RX stream */
 			ret = i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_START);
@@ -66,7 +80,6 @@ K_THREAD_DEFINE(rx_sink_tid, 1024, rx_sink_thread_fn, NULL, NULL, NULL, -3, 0, K
 
 int main(void)
 {
-	struct i2s_config conf;
 	int ret;
 
 	/* Application Banner */
@@ -84,17 +97,7 @@ int main(void)
 		return -ENODEV;
 	}
 
-	/* Configure RX for clock generation (NXP SAI requirement) */
-	conf.word_size = CONFIG_AUDIO_BIT_WIDTH;
-	conf.channels = 2;
-	conf.format = I2S_FMT_DATA_FORMAT_I2S;
-	conf.options = I2S_OPT_BIT_CLK_CONTROLLER | I2S_OPT_FRAME_CLK_CONTROLLER;
-	conf.frame_clk_freq = CONFIG_AUDIO_SAMPLE_RATE;
-	conf.block_size = 128 * 2 * (CONFIG_AUDIO_BIT_WIDTH / 8);
-	conf.timeout = 2000;
-	conf.mem_slab = &rx_slab;
-
-	ret = i2s_configure(i2s_dev, I2S_DIR_RX, &conf);
+	ret = configure_rx();
 	if (ret < 0) {
 		LOG_ERR("I2S RX configure failed: %d", ret);
 		return ret;

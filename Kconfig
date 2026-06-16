@@ -11,7 +11,7 @@ config AUDIO_SAMPLE_RATE
 
 config VOICECARD_VOICES
 	int "Number of voices"
-	default 32
+	default 16
 	help
 	  Number of voices support.  Multiples of 2.  2, 4, 8, 16 etc...
 

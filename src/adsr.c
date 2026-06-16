@@ -79,7 +79,7 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 			padsr->current_gain = 32767;
 		} else {
 			padsr->current_gain =
-				(q15_t)(((padsr->initial_lifetime - padsr->lifetime) * 32767U) /
+				(q15_t)(((uint64_t)(padsr->initial_lifetime - padsr->lifetime) * 32767U) /
 					padsr->initial_lifetime);
 		}
 		break;
