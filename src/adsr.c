@@ -56,8 +56,10 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 		return ret_state;
 	}
 
+	bool keep_transitioning = true;
+
 	/* State transition when lifetime expires */
-	while (padsr->lifetime == 0 && padsr->state != END) {
+	while (padsr->lifetime == 0 && padsr->state != END && keep_transitioning) {
 		padsr->start_gain = padsr->current_gain;
 		switch (padsr->state) {
 		case ATTACK:
@@ -96,7 +98,7 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 				}
 				padsr->current_gain = (q15_t)(padsr->gain_accum >> 16);
 			} else {
-				goto transition_done;
+				keep_transitioning = false;
 			}
 			break;
 		case RELEASE:
@@ -108,10 +110,10 @@ enum adsr_state adsr_process(struct adsr *padsr, struct adsr_param param, uint32
 			padsr->current_gain = 0;
 			break;
 		default:
-			goto transition_done;
+			keep_transitioning = false;
+			break;
 		}
 	}
-transition_done:
 
 	if (padsr->state == END) {
 		padsr->lifetime = 0;
